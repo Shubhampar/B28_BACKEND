@@ -5,7 +5,11 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+<<<<<<< HEAD
     "start": "nodemon index.js"
+=======
+    "start":"node index.js"
+>>>>>>> e171e3320b50b639272d2a8ffa6182b18683c593
   },
   "keywords": [],
   "author": "",

@@ -7,42 +7,47 @@ const bcrypt=require("bcrypt")
 const userRouter=express.Router()
 
 userRouter.post("/register", async (req, res) => {
-const { username, email, pass } = req.body;
   try {
-    bcrypt.hash(pass, 5, async (err, hash) => {
-      if (err) {
-        res.status(400).json({ msg: "something went wrong", error: err.msg });
-      } else {
-        const user = new UserModel({ username, email, pass: hash});
-        await user.save();
-        res.status(200).json({ msg: "The new user has been registered"});
-      }
+    const existingUser = await UserModel.findOne({ email: req.body.email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists, please login' });
+    }
+
+    const hashedPassword = await bcrypt.hash(req.body.password, 10);
+
+    const user = new UserModel({
+      name: req.body.name,
+      email: req.body.email,
+      gender: req.body.gender,
+      password: hashedPassword,
+      age: req.body.age,
+      city: req.body.city,
+      is_married: req.body.is_married,
     });
-  } catch (err) {
-      res.status(400).json({"error":err.msg})
+    await user.save();
+
+    res.status(201).json({ message: 'User registered successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'An error occurred' });
   }
 });
 
 userRouter.post("/login",async(req, res) => {
-    const { email, pass } = req.body;
-try {
-      const user = await UserModel.findOne({ email })
-      if (user) {
-          bcrypt.compare(pass, user.pass,  (err, result)=> {
-              if (result) {
-                  const token = jwt.sign({userID:user._id,user:user.username}, "book",{
-                    expiresIn: "7d",
-                  })
-                  res.status(200).json({msg:"Login successfull!!",token})   
-              } else {
-                  res.status(400).json({ err:err});
-            }      
-          });
-      } else {
-          res.status(400).json({ msg: "User does not exist!!" });
-      }
-  } catch (err) {
-      res.status(400).json({ error: err});
+  try {
+    const user = await UserModel.findOne({ email: req.body.email });
+    if (!user) {
+      return res.status(401).json({ message: 'Authentication failed' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(req.body.password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Authentication failed' });
+    }
+
+    const token = jwt.sign({ userId: user._id }, 'masai', { expiresIn: '7d' });
+    res.status(200).json({ message: 'Login successful', token });
+  } catch (error) {
+    res.status(500).json({ message: 'An error occurred' });
   }
 });
 

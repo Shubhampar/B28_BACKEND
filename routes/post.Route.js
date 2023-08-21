@@ -1,72 +1,89 @@
 const express = require("express");
+const mongoose=require("mongoose")
 const {PostModel } = require("../models/post.Model");
 const {UserModel}=require("../models/user.Model")
 const { auth } = require("../middlewares/auth.middleware");
 // const { userRouter } = require("./user.Route");
 
 
-
 const postRouter = express.Router();
 
 postRouter.post("/add",auth, async (req,res) => {
   try {
-    const user = await user.findById(req.user.userId);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
     const post = new PostModel({
       title: req.body.title,
       body: req.body.body,
       device: req.body.device,
       no_of_comments: req.body.no_of_comments,
-      user: user._id,
+      user: req.user._id, // Set the logged-in user's ID
     });
-    await post.save();
 
-    res.status(201).json({ message: 'Post created successfully' });
+    await post.save();
+    res.status(201).send('Post created successfully');
   } catch (error) {
-    res.status(500).json({ message: 'An error occurred' });
+    res.status(500).send(error.message);
   }
 });
 
 postRouter.get("/",auth, async (req, res) => {
   try {
-    const user = await user.findById(req.user.userId);
+    let query = { user: req.user._id };
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    // Handle user filter query
+    const userIdQuery = req.query.user;
+    if (userIdQuery && mongoose.isValidObjectId(userIdQuery)) { // Use mongoose.isValidObjectId
+      query.user = userIdQuery;
     }
 
-    const posts = await PostModel.find({ user: user._id })
-      .limit(3) // Limit to 3 posts per page
-      .skip((req.query.page - 1) * 3) // Pagination
-      .exec();
+    // Handle min and max comments filter queries
+    if (req.query.min_comments) {
+      query.no_of_comments = { $gte: parseInt(req.query.min_comments) };
+    }
+    if (req.query.max_comments) {
+      if (query.no_of_comments) {
+        query.no_of_comments.$lte = parseInt(req.query.max_comments);
+      } else {
+        query.no_of_comments = { $lte: parseInt(req.query.max_comments) };
+      }
+    }
 
-    res.status(200).json(posts);
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const perPage = 3;
+    const totalPosts = await PostModel.countDocuments(query);
+    const totalPages = Math.ceil(totalPosts / perPage);
+
+    const userPosts = await PostModel.find(query)
+      .sort('-createdAt')
+      .skip((page - 1) * perPage)
+      .limit(perPage);
+
+    res.send({
+      posts: userPosts,
+      totalPages,
+      currentPage: page,
+    });
   } catch (error) {
-    res.status(500).json({ message: 'An error occurred' });
+    res.status(500).send(error.message);
   }
 });
 
 postRouter.get('/top',auth, async (req, res) => {
   try {
-    const user = await user.findById(req.user.userId);
+    const query = { user: req.user._id };
+    
+    // Pagination
+    const page = parseInt(req.query.page) || 1;
+    const perPage = 3;
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    const topPosts = await PostModel.find({ user: user._id })
-      .sort({ no_of_comments: -1 })
-      .limit(3) // Limit to 3 top posts per page
-      .skip((req.query.page - 1) * 3) // Pagination
-      .exec();
-
-    res.status(200).json(topPosts);
+    const topPosts = await PostModel.find(query)
+      .sort('-no_of_comments')
+      .skip((page - 1) * perPage)
+      .limit(perPage);
+    
+    res.send(topPosts);
   } catch (error) {
-    res.status(500).json({ message: 'An error occurred' });
+    res.status(500).send(error.message);
   }
 });
 
